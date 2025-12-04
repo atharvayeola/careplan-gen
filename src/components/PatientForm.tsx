@@ -78,7 +78,7 @@ export default function PatientForm() {
                 "patient.mrn",
                 "patient.dob",
                 "patient.sex",
-                "patient.weight",
+                // weight is optional, so not included in validation
             ];
         } else if (currentStep === 2) {
             fieldsToValidate = [
@@ -462,7 +462,9 @@ export default function PatientForm() {
                                 <input
                                     type="number"
                                     step="0.1"
-                                    {...register("patient.weight", { valueAsNumber: true })}
+                                    {...register("patient.weight", {
+                                        setValueAs: v => v === '' || v === null ? undefined : parseFloat(v)
+                                    })}
                                     className={inputClass}
                                     placeholder="e.g., 72.5"
                                 />

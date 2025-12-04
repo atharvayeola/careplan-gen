@@ -13,7 +13,7 @@ export const patientSchema = z.object({
         message: "Invalid date format",
     }),
     sex: z.enum(["Male", "Female", "Other"]),
-    weight: z.number().positive("Weight must be positive").optional(),
+    weight: z.number().positive("Weight must be positive").optional().nullable(),
     primaryDiagnosis: z.string().min(1, "Primary diagnosis is required"),
     // These are strings in the form (textarea) but will be transformed to arrays before sending to backend
     additionalDiagnoses: z.string().optional(),
