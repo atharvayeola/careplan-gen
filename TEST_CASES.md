@@ -387,3 +387,250 @@ Submit multiple orders, then click "Export Pharma Report" to verify CSV contains
     - Click "Export Pharma Report"
     - Verify CSV contains all 3 orders with complete data
 
+---
+
+## Feedback System Test Cases
+
+### Test Case 21: Care Plan Editing & Feedback Submission
+
+**Objective**: Verify that users can edit AI-generated care plans and submit structured feedback that gets processed by the LLM extraction layer.
+
+**Prerequisites**:
+- Complete Test Case 1 (IVIG for Myasthenia Gravis) through care plan generation
+- Care plan should be displayed on screen
+
+**Test Steps**:
+
+1. **Edit Care Plan**
+   - Click the "✏️ Edit" button on the generated care plan
+   - Verify the care plan becomes editable (textarea appears)
+   - Verify "Editing Mode" label appears next to title
+   - Make the following edits:
+     ```
+     Add under "Monitoring plan & lab schedule":
+     - Pre-treatment: Obtain baseline IgA level to screen for IgA deficiency
+     - Monitor: Vital signs every 30 minutes during infusion
+     ```
+   - Click "💾 Save Changes"
+   - Verify success message appears
+   - Verify care plan updates with your changes
+   - Click "👁️ View Only" to toggle back to read-only mode
+
+2. **Submit Structured Feedback**
+   - Click "📝 Provide Feedback on This Care Plan"
+   - Verify feedback form expands with amber background
+   - Enter the following feedback in the textarea:
+     ```
+     Issue: Missing IgA deficiency screening
+     Suggestion: Add baseline IgA level to pre-treatment labs section for IVIG patients
+     
+     Issue: Infusion monitoring frequency not specified
+     Suggestion: Recommend vital signs every 30 minutes during infusion
+     
+     Issue: No mention of renal protection for elderly patients
+     Suggestion: Consider pre-hydration for patients >65 years old
+     ```
+   - Verify character count validation (should be >10 characters)
+   - Click "✉️ Submit Feedback"
+
+3. **Verify LLM Extraction**
+   - Wait for submission to complete (~2-3 seconds)
+   - Verify success alert appears with extracted categories
+   - Expected extracted categories should include: `monitoring`, `safety`, or `administration`
+   - Verify green "AI Extracted Categories" box appears
+   - Verify extracted categories are displayed as rounded pills
+   - Check alert message indicates severity level (high/medium/low)
+
+4. **Verify Backend Storage**
+   - Open browser DevTools → Network tab
+   - Find the POST request to `/api/feedback/submit/`
+   - Verify response includes:
+     ```json
+     {
+       "success": true,
+       "feedbackId": "<uuid>",
+       "extractedCategories": ["monitoring", "safety", ...],
+       "extractedIssues": ["Missing IgA deficiency screening", ...],
+       "extractedSuggestions": ["Add baseline IgA level...", ...],
+       "severity": "medium" or "high",
+       "batchTriggered": false,
+       "unprocessedCount": 1
+     }
+     ```
+
+**Expected Results**:
+- ✓ Care plan editing works smoothly
+- ✓ Changes are saved to backend
+- ✓ Feedback submission succeeds
+- ✓ LLM correctly extracts categories from free-form text
+- ✓ Extracted categories are displayed to user
+- ✓ Severity is assessed appropriately
+- ✓ `unprocessedCount` increments (shown in API response)
+
+**Edge Cases to Test**:
+- Try submitting feedback with <10 characters → Should show validation error
+- Try editing care plan without saving → Changes should not persist
+- Submit feedback without editing care plan → Should work (diff will be empty)
+
+---
+
+### Test Case 22: Batch Processing & LLM Rule Extraction
+
+**Objective**: Verify that the system automatically triggers batch processing after 5 feedback submissions and generates improvement rules.
+
+**Prerequisites**:
+- Clean database or <5 unprocessed feedback records exist
+- Access to backend logs and file system
+
+**Test Steps**:
+
+1. **Submit First 4 Feedbacks**
+   - Complete Test Cases 1-4 (IVIG, Rituxan, Chemotherapy, Hemophilia)
+   - For each, generate care plan and submit feedback with different issues:
+   
+   **Feedback 1 (IVIG):**
+   ```
+   Issue: No pre-medication protocol specified
+   Suggestion: Add acetaminophen 650mg and diphenhydramine 25mg pre-medications
+   ```
+   
+   **Feedback 2 (Rituxan):**
+   ```
+   Issue: Hepatitis B screening mentioned but no action plan
+   Suggestion: Specify prophylactic antiviral if HBcAb positive
+   ```
+   
+   **Feedback 3 (Pediatric Chemo):**
+   ```
+   Issue: No BSA calculation shown
+   Suggestion: Show BSA calculation: weight(kg)^0.425 × height(cm)^0.725 × 0.007184
+   ```
+   
+   **Feedback 4 (Hemophilia):**
+   ```
+   Issue: No breakthrough bleeding protocol
+   Suggestion: Add emergency dosing instructions for breakthrough bleeding
+   ```
+   
+   - Verify each submission shows `"batchTriggered": false`
+   - Verify `unprocessedCount` increments: 1, 2, 3, 4
+
+2. **Submit 5th Feedback (Trigger Batch)**
+   - Complete Test Case 5 (Multiple Sclerosis with Ocrelizumab)
+   - Generate care plan
+   - Submit feedback:
+     ```
+     Issue: PML risk mentioned but monitoring plan incomplete
+     Suggestion: Specify MRI frequency and JC virus antibody titer monitoring schedule
+     
+     Issue: No infusion reaction management protocol
+     Suggestion: Add step-by-step protocol for mild, moderate, severe reactions
+     ```
+   - **Important**: Watch for batch processing trigger
+
+3. **Verify Batch Processing Triggered**
+   - Check API response for 5th feedback:
+     ```json
+     {
+       "success": true,
+       "feedbackId": "<uuid>",
+       "extractedCategories": [...],
+       "batchTriggered": true,  // ← Should be TRUE
+       "unprocessedCount": 0     // ← Should reset to 0
+     }
+     ```
+   - Alert message should indicate: "🎯 Batch processing triggered!"
+
+4. **Verify Backend Logs**
+   - Check terminal running Django server
+   - Look for log messages:
+     ```
+     Batch threshold reached (5). Triggering batch processing...
+     Processing batch of 5 feedback records...
+     Batch 1 processed successfully
+     Appended batch 1 rules to .../prompt_improvements.md
+     ```
+
+5. **Verify Prompt Improvements File Created**
+   - Navigate to: `/Users/ayeola/Downloads/lamarhealth_ta/backend/careplan/`
+   - Verify `prompt_improvements.md` file exists
+   - Open the file and verify format:
+     ```markdown
+     ## Batch 1 - 2025-12-04 14:XX
+     
+     ### Always include pre-medication protocols for infusion therapies
+     - **Confidence**: high
+     - **Applies to**: all infusion therapies
+     - **Support**: 4/5 feedback instances
+     - **Action**: Consider adding to main prompt
+     
+     ### Specify BSA calculations for weight-based dosing
+     - **Confidence**: high
+     - **Applies to**: pediatric chemotherapy
+     - **Support**: 3/5 feedback instances
+     - **Action**: Consider adding to main prompt
+     
+     **Recommendation**: update_prompt
+     ```
+
+6. **Verify Database State**
+   - Check that all 5 feedback records are marked as processed
+   - Verify `batch_number = 1` for all 5 records
+   - Verify `processed_for_prompt = True` for all 5 records
+
+7. **Test Next Batch** (Optional)
+   - Submit 5 more feedbacks
+   - Verify batch_number increments to 2
+   - Verify `prompt_improvements.md` appends new batch section
+
+**Expected Results**:
+- ✓ System tracks unprocessed feedback count accurately
+- ✓ Batch processing triggers automatically on 5th feedback
+- ✓ LLM analyzes all 5 feedbacks and extracts common patterns
+- ✓ High-confidence rules (≥3/5 support) are identified
+- ✓ `prompt_improvements.md` file is created/updated
+- ✓ All feedback records marked as processed
+- ✓ Batch number assigned correctly
+- ✓ Frontend receives `batchTriggered: true` notification
+
+**Verification Checklist**:
+- [ ] `unprocessedCount` increments from 1→2→3→4→5
+- [ ] 5th feedback triggers batch processing
+- [ ] Backend logs show batch processing messages
+- [ ] `prompt_improvements.md` file created
+- [ ] File contains high-confidence rules with ≥3/5 support
+- [ ] Database records updated correctly
+- [ ] Next 5 feedbacks create Batch 2
+
+**Edge Cases to Test**:
+- What if LLM extraction fails for one feedback? (Should use fallback categorization)
+- What if LLM rule extraction fails? (Check logs for error, file should show error message)
+- Submit 6 feedbacks rapidly → Verify only first 5 are batched, 6th starts new count
+
+---
+
+## Testing the Complete Feedback Loop
+
+**Full Integration Test** (Combines Test Cases 21 & 22):
+
+1. Start with clean database
+2. Complete 5 different test cases (1-5)
+3. For each:
+   - Generate care plan
+   - Edit care plan with real improvements
+   - Submit structured feedback
+4. On 5th submission, verify:
+   - Batch processing triggers
+   - Rules extracted make clinical sense
+   - System is ready for next batch
+5. Review `prompt_improvements.md` with a pharmacist
+6. Update main LLM prompt based on high-confidence rules
+7. Test new care plan generation to verify improvements
+
+**Success Criteria**:
+- All 5 feedbacks submitted successfully
+- LLM extracts relevant categories (not just "other")
+- Batch processing completes without errors
+- Generated rules are clinically appropriate
+- System ready for continuous improvement loop
+

@@ -33,6 +33,19 @@ export default function PatientForm() {
     const [providerValidationError, setProviderValidationError] = useState<string | null>(null);
     const [patientValidationError, setPatientValidationError] = useState<string | null>(null);
 
+    // Feedback system state
+    const [carePlanId, setCarePlanId] = useState<string | null>(null);
+    const [originalCarePlan, setOriginalCarePlan] = useState<string>("");
+    const [editedCarePlan, setEditedCarePlan] = useState<string>("");
+    const [isEditingCarePlan, setIsEditingCarePlan] = useState(false);
+    const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+    const [feedbackText, setFeedbackText] = useState("");
+    const [extractedCategories, setExtractedCategories] = useState<string[]>([]);
+    const [isSavingCarePlan, setIsSavingCarePlan] = useState(false);
+    const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+    const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+    const [feedbackError, setFeedbackError] = useState<string | null>(null);
+
     const {
         register,
         handleSubmit,
@@ -48,6 +61,18 @@ export default function PatientForm() {
 
     // Watch all fields for the review step
     const formData = watch();
+
+    // Feedback placeholder text
+    const FEEDBACK_PLACEHOLDER = `Please describe the issues you found and your suggestions:
+
+Format example:
+Issue: Missing renal dose adjustment for CrCl <30
+Suggestion: Add renal dosing table in administration section
+
+Issue: No hepatitis B screening mentioned
+Suggestion: Include HBsAg/HBcAb in pre-treatment labs
+
+You can also provide general feedback in your own words.`;
 
     // Progress simulation effect
     useEffect(() => {
@@ -209,6 +234,9 @@ export default function PatientForm() {
             }
 
             setCarePlan(result.carePlan.content);
+            setOriginalCarePlan(result.carePlan.content);  // Store original for diff
+            setCarePlanId(result.carePlan.id);  // Store ID for updates
+            setEditedCarePlan(result.carePlan.content);  // Initialize edited version
         } catch (error) {
             console.error(error);
             alert("Failed to generate care plan");
@@ -220,7 +248,7 @@ export default function PatientForm() {
     const handleDownloadCarePlan = () => {
         if (!carePlan) return;
 
-        const blob = new Blob([carePlan], { type: "text/plain" });
+        const blob = new Blob([editedCarePlan || carePlan], { type: "text/plain" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -229,6 +257,78 @@ export default function PatientForm() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    const handleSaveCarePlanEdits = async () => {
+        if (!carePlanId || !editedCarePlan) return;
+
+        setIsSavingCarePlan(true);
+        try {
+            const response = await fetch('http://localhost:8000/api/care-plan/update/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    carePlanId: carePlanId,
+                    editedContent: editedCarePlan
+                })
+            });
+
+            if (response.ok) {
+                setCarePlan(editedCarePlan);
+                setIsEditingCarePlan(false);
+                alert('Care plan updated successfully!');
+            } else {
+                alert('Failed to save care plan. Please try again.');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error saving care plan');
+        } finally {
+            setIsSavingCarePlan(false);
+        }
+    };
+
+    const handleSubmitFeedback = async () => {
+        if (!carePlanId || feedbackText.length < 10) return;
+
+        setIsSubmittingFeedback(true);
+        setFeedbackError(null);
+        try {
+            const response = await fetch('http://localhost:8000/api/feedback/submit/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    carePlanId: carePlanId,
+                    originalContent: originalCarePlan,
+                    editedContent: editedCarePlan || carePlan,
+                    feedbackText: feedbackText
+                })
+            });
+
+            const result = await response.json();
+            console.log('Feedback response:', result);
+
+            if (response.ok) {
+                // Show extracted categories
+                setExtractedCategories(result.extractedCategories || []);
+                setFeedbackSubmitted(true);
+
+                // Log batch info
+                if (result.batchTriggered) {
+                    console.log('🎯 Batch processing triggered!');
+                }
+                console.log('Severity:', result.severity);
+                console.log('Unprocessed count:', result.unprocessedCount);
+            } else {
+                setFeedbackError(result.error || 'Failed to submit feedback. Please try again.');
+                console.error('Feedback submission failed:', result);
+            }
+        } catch (error) {
+            console.error('Error submitting feedback:', error);
+            setFeedbackError('Network error. Please check your connection and try again.');
+        } finally {
+            setIsSubmittingFeedback(false);
+        }
     };
 
     const onSubmit = async (data: FormData) => {
@@ -302,14 +402,7 @@ export default function PatientForm() {
     const ErrorMessage = ({ message }: { message?: string }) => {
         if (!message) return null;
         return (
-            <p
-                className="text-red-600 text-xs font-mono font-semibold not-italic mt-1.5"
-                style={{
-                    color: '#dc2626', // ensure red even if utility classes fail
-                    fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                    fontStyle: 'normal'
-                }}
-            >
+            <p className="text-red-600 text-xs mt-1.5 font-medium">
                 {message}
             </p>
         );
@@ -322,70 +415,82 @@ export default function PatientForm() {
         }
     };
 
-    const labelClass = "block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5";
-    const inputClass = "w-full rounded-lg bg-slate-50 border-slate-200 shadow-sm focus:bg-white focus:border-sky-500 focus:ring-sky-500 py-3 px-4 border transition-all placeholder:text-slate-400";
-
     return (
-        <div className="max-w-3xl mx-auto">
+        <div className="w-full">
             {/* Stepper */}
-            <div className="mb-10">
-                <div className="flex items-center justify-between relative">
-                    <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-full h-0.5 bg-slate-100 -z-10" />
-                    {STEPS.map((step, index) => {
-                        const isCompleted = currentStep > index;
-                        const isCurrent = currentStep === index;
+            <div className="mb-12 border-b border-zinc-200 pb-8">
+                <nav aria-label="Progress">
+                    <ol role="list" className="flex items-center justify-between w-full max-w-2xl mx-auto">
+                        {STEPS.map((step, stepIdx) => {
+                            const isCompleted = currentStep > stepIdx;
+                            const isCurrent = currentStep === stepIdx;
 
-                        return (
-                            <div key={step.id} className="flex flex-col items-center bg-slate-50 px-2 relative">
-                                <div
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 
-                                    ${isCompleted ? 'bg-sky-500 text-white' : isCurrent ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-400'}`}
-                                >
-                                    {index + 1}
-                                </div>
-                                <span className={`text-[10px] uppercase tracking-wider mt-2 font-bold transition-all ${isCurrent ? 'text-slate-900' : 'text-slate-400'}`}>
-                                    {step.name}
-                                </span>
-                                {isCurrent && (
-                                    <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-12 h-1 bg-sky-500 rounded-full" />
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                            return (
+                                <li key={step.name} className="relative">
+                                    {isCompleted ? (
+                                        <div className="group flex flex-col items-center">
+                                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black hover:bg-zinc-800 transition-colors">
+                                                <svg className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                </svg>
+                                            </span>
+                                            <span className="mt-2 text-xs font-semibold text-black uppercase tracking-wide">{step.name}</span>
+                                        </div>
+                                    ) : isCurrent ? (
+                                        <div className="flex flex-col items-center" aria-current="step">
+                                            <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-black bg-white">
+                                                <span className="h-2.5 w-2.5 rounded-full bg-black" />
+                                            </span>
+                                            <span className="mt-2 text-xs font-bold text-black uppercase tracking-wide">{step.name}</span>
+                                        </div>
+                                    ) : (
+                                        <div className="group flex flex-col items-center">
+                                            <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-zinc-300 bg-white group-hover:border-zinc-400 transition-colors">
+                                                <span className="h-2.5 w-2.5 rounded-full bg-transparent group-hover:bg-zinc-300 transition-colors" />
+                                            </span>
+                                            <span className="mt-2 text-xs font-semibold text-zinc-400 uppercase tracking-wide group-hover:text-zinc-500 transition-colors">{step.name}</span>
+                                        </div>
+                                    )}
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </nav>
             </div>
 
             <form
                 onSubmit={handleSubmit(onSubmit)}
                 onKeyDown={handleKeyDown}
-                className="bg-white shadow-xl shadow-slate-200/50 rounded-2xl p-8 border border-slate-100"
+                className="bg-white shadow-xl shadow-zinc-200/50 rounded-2xl p-8 sm:p-12 border border-zinc-100 max-w-4xl mx-auto"
             >
 
                 {/* Step 1: Provider Information */}
                 {currentStep === 0 && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="border-b border-slate-100 pb-6">
-                            <h2 className="text-2xl font-bold text-slate-900">Provider Details</h2>
-                            <p className="text-slate-500 text-sm mt-1">Please enter your provider information.</p>
+                        <div>
+                            <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">Provider Details</h2>
+                            <p className="text-zinc-500 mt-2">Please enter your provider information to verify your identity.</p>
                         </div>
 
-                        <div className="grid gap-6">
+                        <div className="h-px bg-zinc-100 w-full" />
+
+                        <div className="grid gap-8">
                             <div>
-                                <label className={labelClass}>Provider Name</label>
+                                <label className="label-text">Provider Name</label>
                                 <input
                                     {...register("provider.name")}
-                                    className={inputClass}
+                                    className="input-field"
                                     placeholder="e.g., Dr. John Smith"
                                 />
                                 <ErrorMessage message={errors.provider?.name?.message} />
                             </div>
                             <div>
-                                <label className={labelClass}>
-                                    NPI <span className="text-slate-400 font-normal normal-case ml-1">(10 digits)</span>
+                                <label className="label-text">
+                                    NPI (10 digits)
                                 </label>
                                 <input
                                     {...register("provider.npi")}
-                                    className={inputClass}
+                                    className="input-field"
                                     placeholder="1234567890"
                                     maxLength={10}
                                 />
@@ -399,73 +504,78 @@ export default function PatientForm() {
                 {/* Step 2: Patient Information */}
                 {currentStep === 1 && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="border-b border-slate-100 pb-6">
-                            <h2 className="text-2xl font-bold text-slate-900">Patient Demographics</h2>
-                            <p className="text-slate-500 text-sm mt-1">Enter the patient's personal details.</p>
+                        <div>
+                            <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">Patient Demographics</h2>
+                            <p className="text-zinc-500 mt-2">Enter the patient's personal details correctly.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="h-px bg-zinc-100 w-full" />
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div>
-                                <label className={labelClass}>First Name</label>
+                                <label className="label-text">First Name</label>
                                 <input
                                     {...register("patient.firstName")}
-                                    className={inputClass}
+                                    className="input-field"
                                 />
                                 <ErrorMessage message={errors.patient?.firstName?.message} />
                             </div>
                             <div>
-                                <label className={labelClass}>Last Name</label>
+                                <label className="label-text">Last Name</label>
                                 <input
                                     {...register("patient.lastName")}
-                                    className={inputClass}
+                                    className="input-field"
                                 />
                                 <ErrorMessage message={errors.patient?.lastName?.message} />
                             </div>
                             <div>
-                                <label className={labelClass}>
-                                    MRN <span className="text-slate-400 font-normal normal-case ml-1">(6 digits)</span>
-                                </label>
+                                <label className="label-text">MRN (6 digits)</label>
                                 <input
                                     {...register("patient.mrn")}
-                                    className={inputClass}
+                                    className="input-field"
                                     placeholder="123456"
                                     maxLength={6}
                                 />
                                 <ErrorMessage message={errors.patient?.mrn?.message} />
                             </div>
                             <div>
-                                <label className={labelClass}>Date of Birth</label>
+                                <label className="label-text">Date of Birth</label>
                                 <input
                                     type="date"
                                     {...register("patient.dob")}
-                                    className={inputClass}
+                                    className="input-field"
                                 />
                                 <ErrorMessage message={errors.patient?.dob?.message} />
                             </div>
                             <div>
-                                <label className={labelClass}>Sex</label>
-                                <select
-                                    {...register("patient.sex")}
-                                    className={inputClass}
-                                >
-                                    <option value="">Select...</option>
-                                    <option value="Male">Male</option>
-                                    <option value="Female">Female</option>
-                                    <option value="Other">Other</option>
-                                </select>
+                                <label className="label-text">Sex</label>
+                                <div className="relative">
+                                    <select
+                                        {...register("patient.sex")}
+                                        className="input-field appearance-none"
+                                    >
+                                        <option value="">Select...</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-zinc-500">
+                                        <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                                        </svg>
+                                    </div>
+                                </div>
                                 <ErrorMessage message={errors.patient?.sex?.message} />
                             </div>
                             <div>
-                                <label className={labelClass}>
-                                    Weight (kg) <span className="text-slate-400 font-normal normal-case ml-1">(optional)</span>
-                                </label>
+                                <label className="label-text">Weight (kg) <span className="text-zinc-400 font-normal ml-1">(optional)</span></label>
                                 <input
                                     type="number"
                                     step="0.1"
                                     {...register("patient.weight", {
                                         setValueAs: v => v === '' || v === null ? undefined : parseFloat(v)
                                     })}
-                                    className={inputClass}
+                                    className="input-field"
                                     placeholder="e.g., 72.5"
                                 />
                                 <ErrorMessage message={errors.patient?.weight?.message} />
@@ -479,77 +589,69 @@ export default function PatientForm() {
                 {/* Step 3: Clinical & Order Info */}
                 {currentStep === 2 && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="border-b border-slate-100 pb-6">
-                            <h2 className="text-2xl font-bold text-slate-900">Clinical & Order Details</h2>
-                            <p className="text-slate-500 text-sm mt-1">Provide medical history and order details.</p>
+                        <div>
+                            <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">Clinical & Order Details</h2>
+                            <p className="text-zinc-500 mt-2">Provide medical history and medication order details.</p>
                         </div>
 
-                        <div className="space-y-6">
+                        <div className="h-px bg-zinc-100 w-full" />
+
+                        <div className="space-y-8">
                             <div>
-                                <label className={labelClass}>Primary Diagnosis</label>
+                                <label className="label-text">Primary Diagnosis</label>
                                 <input
                                     {...register("patient.primaryDiagnosis")}
-                                    className={inputClass}
+                                    className="input-field"
                                 />
                                 <ErrorMessage message={errors.patient?.primaryDiagnosis?.message} />
                             </div>
 
                             <div>
-                                <label className={labelClass}>
-                                    Additional Diagnoses <span className="text-slate-400 font-normal normal-case ml-1">(optional, one per line)</span>
-                                </label>
+                                <label className="label-text">Additional Diagnoses <span className="text-zinc-400 font-normal ml-1">(optional, one per line)</span></label>
                                 <textarea
                                     {...register("patient.additionalDiagnoses")}
-                                    className={inputClass}
-                                    rows={3}
+                                    className="input-field min-h-[100px]"
                                     placeholder="e.g., Hypertension&#10;GERD"
                                 />
                                 <ErrorMessage message={errors.patient?.additionalDiagnoses?.message} />
                             </div>
 
                             <div>
-                                <label className={labelClass}>
-                                    Allergies <span className="text-slate-400 font-normal normal-case ml-1">(optional)</span>
-                                </label>
+                                <label className="label-text">Allergies <span className="text-zinc-400 font-normal ml-1">(optional)</span></label>
                                 <textarea
                                     {...register("patient.allergies")}
-                                    className={inputClass}
-                                    rows={2}
+                                    className="input-field min-h-[80px]"
                                     placeholder="e.g., Penicillin, NKDA"
                                 />
                                 <ErrorMessage message={errors.patient?.allergies?.message} />
                             </div>
 
                             <div>
-                                <label className={labelClass}>
-                                    Current Medications <span className="text-slate-400 font-normal normal-case ml-1">(optional, one per line)</span>
-                                </label>
+                                <label className="label-text">Current Medications <span className="text-zinc-400 font-normal ml-1">(optional, one per line)</span></label>
                                 <textarea
                                     {...register("patient.medicationHistory")}
-                                    className={inputClass}
-                                    rows={3}
+                                    className="input-field min-h-[100px]"
                                     placeholder="e.g., Lisinopril 10mg daily"
                                 />
                                 <ErrorMessage message={errors.patient?.medicationHistory?.message} />
                             </div>
 
-                            <div className="pt-6 border-t border-slate-100">
-                                <h3 className="text-lg font-bold text-slate-900 mb-6">Order Information</h3>
+                            <div className="pt-8 border-t border-zinc-100">
+                                <h3 className="text-lg font-bold text-zinc-900 mb-6 tracking-tight">Order Information</h3>
                                 <div className="space-y-6">
                                     <div>
-                                        <label className={labelClass}>Medication to Order</label>
+                                        <label className="label-text">Medication to Order</label>
                                         <input
                                             {...register("order.medication")}
-                                            className={inputClass}
+                                            className="input-field"
                                         />
                                         <ErrorMessage message={errors.order?.medication?.message} />
                                     </div>
                                     <div>
-                                        <label className={labelClass}>Notes</label>
+                                        <label className="label-text">Notes</label>
                                         <textarea
                                             {...register("order.notes")}
-                                            className={inputClass}
-                                            rows={2}
+                                            className="input-field min-h-[80px]"
                                         />
                                     </div>
                                 </div>
@@ -561,67 +663,101 @@ export default function PatientForm() {
                 {/* Step 4: Review & Submit */}
                 {currentStep === 3 && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <div className="border-b border-slate-100 pb-6">
-                            <h2 className="text-2xl font-bold text-slate-900">Review & Submit</h2>
-                            <p className="text-slate-500 text-sm mt-1">Please review the information before submitting.</p>
+                        <div>
+                            <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">Review & Submit</h2>
+                            <p className="text-zinc-500 mt-2">Please verify all information before submitting the order.</p>
                         </div>
 
-                        <div className="bg-slate-50 rounded-xl p-8 border border-slate-200 space-y-8">
+                        <div className="h-px bg-zinc-100 w-full" />
+
+                        {/* Review Sections */}
+                        <div className="space-y-12">
+                            {/* Provider Section */}
                             <div>
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 border-b border-slate-200 pb-2">Provider</h4>
-                                <div className="space-y-3">
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">Name: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.provider?.name}</span>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-zinc-900">Provider Details</h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentStep(0)}
+                                        className="text-xs font-medium text-zinc-500 hover:text-black underline"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                                <div className="bg-zinc-50 rounded-lg p-6 border border-zinc-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Provider Name</span>
+                                        <span className="text-zinc-900 font-medium">{formData.provider?.name}</span>
                                     </div>
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">NPI: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.provider?.npi}</span>
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">NPI</span>
+                                        <span className="text-zinc-900 font-medium">{formData.provider?.npi}</span>
                                     </div>
                                 </div>
                             </div>
 
+                            {/* Patient Section */}
                             <div>
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 border-b border-slate-200 pb-2">Patient</h4>
-                                <div className="space-y-3">
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">Name: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.patient?.firstName} {formData.patient?.lastName}</span>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-zinc-900">Patient Demographics</h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentStep(1)}
+                                        className="text-xs font-medium text-zinc-500 hover:text-black underline"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                                <div className="bg-zinc-50 rounded-lg p-6 border border-zinc-100 grid grid-cols-2 md:grid-cols-3 gap-6">
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Name</span>
+                                        <span className="text-zinc-900 font-medium">{formData.patient?.firstName} {formData.patient?.lastName}</span>
                                     </div>
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">MRN: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.patient?.mrn}</span>
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">MRN</span>
+                                        <span className="text-zinc-900 font-medium">{formData.patient?.mrn}</span>
                                     </div>
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">DOB: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.patient?.dob}</span>
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">DOB</span>
+                                        <span className="text-zinc-900 font-medium">{formData.patient?.dob}</span>
                                     </div>
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">Sex: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.patient?.sex}</span>
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Sex</span>
+                                        <span className="text-zinc-900 font-medium">{formData.patient?.sex}</span>
                                     </div>
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">Weight: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.patient?.weight ? `${formData.patient.weight} kg` : '-'}</span>
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Weight</span>
+                                        <span className="text-zinc-900 font-medium">{formData.patient?.weight ? `${formData.patient.weight} kg` : '-'}</span>
                                     </div>
                                 </div>
                             </div>
 
+                            {/* Clinical Section */}
                             <div>
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4 border-b border-slate-200 pb-2">Clinical</h4>
-                                <div className="space-y-3">
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">Diagnosis: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.patient?.primaryDiagnosis}</span>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-bold text-zinc-900">Clinical & Order</h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentStep(2)}
+                                        className="text-xs font-medium text-zinc-500 hover:text-black underline"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                                <div className="bg-zinc-50 rounded-lg p-6 border border-zinc-100 space-y-6">
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Primary Diagnosis</span>
+                                        <span className="text-zinc-900 font-medium">{formData.patient?.primaryDiagnosis}</span>
                                     </div>
-                                    <div className="flex items-baseline gap-3 py-2 border-b border-slate-100">
-                                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 w-24 flex-shrink-0">Order: </span>
-                                        <span className="text-base font-semibold text-slate-900">{formData.order?.medication}</span>
+                                    <div>
+                                        <span className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">Medication Order</span>
+                                        <span className="text-zinc-900 font-medium">{formData.order?.medication}</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
+                        {/* Error & Success States */}
                         {submitErrors.length > 0 && (
                             <div className="p-4 bg-red-50 text-red-600 rounded-lg border border-red-100 text-sm">
                                 <strong className="block mb-1 font-bold">Submission Failed</strong>
@@ -634,35 +770,36 @@ export default function PatientForm() {
                         )}
 
                         {success && (
-                            <div className="p-4 bg-green-50 text-green-700 rounded-lg border border-green-100 text-sm">
-                                <p className="font-medium">Order submitted successfully!</p>
+                            <div className="p-4 bg-zinc-50 text-zinc-900 rounded-lg border border-zinc-200 text-sm shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center flex-shrink-0">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <p className="font-medium">Order submitted successfully!</p>
+                                </div>
                             </div>
                         )}
 
                         {warnings.length > 0 && (
-                            <div
-                                className="p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 text-sm not-italic"
-                                style={{
-                                    color: '#b91c1c',
-                                    fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                                    fontStyle: 'normal'
-                                }}
-                            >
+                            <div className="p-4 bg-amber-50 text-amber-800 rounded-lg border border-amber-100 text-sm">
                                 <strong className="block mb-1 font-bold">Warnings</strong>
                                 <ul className="list-disc pl-4 space-y-1">
                                     {warnings.map((w, i) => (
-                                        <li key={i} className="font-medium">{w}</li>
+                                        <li key={i}>{w}</li>
                                     ))}
                                 </ul>
                             </div>
                         )}
 
+                        {/* Order Action Buttons */}
                         {success && orderId && !carePlan && (
                             <button
                                 type="button"
                                 onClick={handleGenerateCarePlan}
                                 disabled={isGenerating}
-                                className="w-full bg-green-600 text-white py-3 px-4 rounded-xl hover:bg-green-700 disabled:opacity-50 font-bold shadow-md shadow-green-200 transition-all hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                                className="w-full btn-primary flex items-center justify-center gap-2 mt-4"
                             >
                                 {isGenerating ? (
                                     <span className="animate-pulse">{progressMessage || "Generating Care Plan..."}</span>
@@ -672,81 +809,197 @@ export default function PatientForm() {
                             </button>
                         )}
 
+                        {/* Generated Care Plan Display */}
                         {carePlan && (
-                            <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-                                <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
-                                    <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                                        Generated Care Plan
-                                    </h3>
-                                    <pre className="whitespace-pre-wrap text-sm text-slate-600 font-mono bg-white p-4 rounded-lg border border-slate-100 shadow-sm">{carePlan}</pre>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadCarePlan}
-                                    className="w-full bg-indigo-600 text-white py-3 px-4 rounded-xl hover:bg-indigo-700 font-bold shadow-md shadow-indigo-200 transition-all hover:shadow-lg transform hover:-translate-y-0.5"
-                                >
-                                    Download Care Plan
-                                </button>
-
-                                <div className="pt-6 border-t border-slate-100">
-                                    <h4 className="text-center text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">Start New Order</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleStartNewOrder(true)}
-                                            className="bg-white text-slate-700 border border-slate-200 py-3 px-4 rounded-xl hover:bg-slate-50 hover:border-slate-300 font-bold shadow-sm transition-all"
-                                        >
-                                            Same Provider
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleStartNewOrder(false)}
-                                            className="bg-white text-slate-700 border border-slate-200 py-3 px-4 rounded-xl hover:bg-slate-50 hover:border-slate-300 font-bold shadow-sm transition-all"
-                                        >
-                                            New Provider
-                                        </button>
+                            <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 mt-8 pt-8 border-t border-zinc-100">
+                                <div className="p-0 bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+                                    <div className="flex items-center justify-between p-4 border-b border-zinc-100 bg-zinc-50">
+                                        <h3 className="font-bold text-zinc-900 flex items-center gap-2">
+                                            <span className="w-2 h-2 rounded-full bg-black"></span>
+                                            Generated Care Plan
+                                            {isEditingCarePlan && <span className="text-xs text-zinc-500 font-normal ml-2">(Editing Mode)</span>}
+                                        </h3>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsEditingCarePlan(!isEditingCarePlan)}
+                                                className={`text-xs px-3 py-1.5 rounded border font-medium transition-colors ${isEditingCarePlan
+                                                    ? 'bg-black text-white border-black hover:bg-zinc-800'
+                                                    : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50 hover:text-black'
+                                                    }`}
+                                            >
+                                                {isEditingCarePlan ? 'View Only' : 'Edit Plan'}
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    <div className="p-0">
+                                        {isEditingCarePlan ? (
+                                            <textarea
+                                                value={editedCarePlan}
+                                                onChange={(e) => setEditedCarePlan(e.target.value)}
+                                                className="w-full h-96 p-6 font-mono text-sm leading-relaxed focus:outline-none resize-y"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-96 p-6 overflow-auto bg-white font-mono text-sm leading-relaxed text-zinc-700 whitespace-pre-wrap">
+                                                {editedCarePlan || carePlan}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {isEditingCarePlan && (
+                                        <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveCarePlanEdits}
+                                                disabled={isSavingCarePlan}
+                                                className="btn-primary py-2 text-xs"
+                                            >
+                                                {isSavingCarePlan ? 'Saving...' : 'Save Changes'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
+
+                                <div className="flex gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadCarePlan}
+                                        className="btn-secondary flex-1 flex items-center justify-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        Download
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowFeedbackForm(!showFeedbackForm)}
+                                        className="btn-secondary flex-1 flex items-center justify-center gap-2"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                        </svg>
+                                        Provide Feedback
+                                    </button>
+                                </div>
+
+                                {showFeedbackForm && (
+                                    <div className="mt-6 p-6 bg-zinc-50 rounded-xl border border-zinc-200 animate-in fade-in slide-in-from-top-2">
+                                        <h4 className="font-bold text-zinc-900 mb-2">Feedback & Suggestions</h4>
+                                        <p className="text-sm text-zinc-500 mb-4">Help us improve the care plan generation by describing what was missing or incorrect.</p>
+
+                                        <div className="relative">
+                                            <textarea
+                                                value={feedbackText}
+                                                onChange={(e) => setFeedbackText(e.target.value)}
+                                                placeholder={FEEDBACK_PLACEHOLDER}
+                                                className="w-full min-h-[150px] p-4 rounded-lg border border-zinc-300 focus:border-black focus:ring-1 focus:ring-black text-sm"
+                                            />
+                                        </div>
+
+                                        {feedbackError && (
+                                            <div className="mt-3 text-red-600 text-xs font-medium bg-red-50 p-3 rounded-lg border border-red-100">
+                                                {feedbackError}
+                                            </div>
+                                        )}
+
+                                        {feedbackSubmitted && (
+                                            <div className="mt-3 p-4 bg-zinc-900 text-white rounded-lg text-sm shadow-lg">
+                                                <strong className="block mb-2 text-zinc-100">Thank you for your feedback!</strong>
+                                                <p className="text-zinc-400 text-xs mb-3">We've recorded your suggestions and will use them to improve our system.</p>
+
+                                                {extractedCategories.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        {extractedCategories.map((cat, i) => (
+                                                            <span key={i} className="inline-flex items-center px-2 py-1 rounded-md bg-zinc-800 text-xs text-zinc-300 border border-zinc-700">
+                                                                {cat}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div className="flex justify-end gap-3 mt-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowFeedbackForm(false)}
+                                                className="px-4 py-2 text-sm font-medium text-zinc-600 hover:text-black transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleSubmitFeedback}
+                                                disabled={isSubmittingFeedback || feedbackText.length < 10}
+                                                className="btn-primary text-sm py-2"
+                                            >
+                                                {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
+
                     </div>
                 )}
 
-                {/* Navigation Buttons */}
-                <div className="mt-10 flex justify-between pt-8 border-t border-slate-100">
-                    <button
-                        type="button"
-                        onClick={handleBack}
-                        disabled={currentStep === 0 || success}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-colors
-                            ${currentStep === 0 || success
-                                ? 'text-slate-300 cursor-not-allowed'
-                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                    >
-                        Back
-                    </button>
+                <div className="flex justify-between pt-8 mt-4 border-t border-zinc-100">
+                    {currentStep > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleBack}
+                            className="btn-secondary"
+                        >
+                            Back
+                        </button>
+                    )}
+
+                    {currentStep === 0 && <div />} {/* Spacer */}
 
                     {currentStep < STEPS.length - 1 ? (
                         <button
                             type="button"
                             onClick={handleNext}
-                            className="bg-slate-900 text-white px-8 py-3 rounded-xl text-sm font-bold hover:bg-slate-800 shadow-lg shadow-slate-200 transition-all hover:shadow-xl transform hover:-translate-y-0.5"
+                            className="btn-primary ml-auto"
                         >
-                            Next
+                            Next Step
                         </button>
                     ) : (
                         !success && (
                             <button
                                 type="submit"
                                 disabled={isSubmitting}
-                                className="bg-sky-500 text-white px-10 py-3 rounded-xl text-sm font-bold hover:bg-sky-600 shadow-lg shadow-sky-200 transition-all hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                                className="btn-primary ml-auto"
                             >
                                 {isSubmitting ? "Submitting..." : "Submit Order"}
                             </button>
                         )
                     )}
+
+                    {success && !carePlan && (
+                        <button
+                            type="button"
+                            onClick={() => handleStartNewOrder(true)}
+                            className="btn-secondary ml-auto"
+                        >
+                            New Order (Same Provider)
+                        </button>
+                    )}
+
+                    {success && carePlan && (
+                        <button
+                            type="button"
+                            onClick={() => handleStartNewOrder(false)}
+                            className="btn-secondary ml-auto"
+                        >
+                            Start Fresh Order
+                        </button>
+                    )}
                 </div>
+
             </form>
         </div>
     );

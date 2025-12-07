@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Provider, Patient, Order, CarePlan
+from .models import Provider, Patient, Order, CarePlan, CarePlanFeedback
 import re
 
 class ProviderSerializer(serializers.Serializer):
@@ -47,7 +47,7 @@ class OrderSerializer(serializers.ModelSerializer):
 class CarePlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarePlan
-        fields = ['id', 'content', 'created_at']
+        fields = ['id', 'content', 'version', 'is_edited', 'created_at']
 
 class SubmitFormSerializer(serializers.Serializer):
     provider = ProviderSerializer()
@@ -65,3 +65,43 @@ class PatientCredentialSerializer(serializers.Serializer):
         if not re.match(r'^\d{6}$', value):
             raise serializers.ValidationError("MRN must be exactly 6 digits")
         return value
+
+# New serializers for feedback system
+
+class CarePlanUpdateSerializer(serializers.Serializer):
+    carePlanId = serializers.UUIDField()
+    editedContent = serializers.CharField()
+
+    def validate_editedContent(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Care plan content cannot be empty")
+        return value.strip()
+
+class FeedbackSubmissionSerializer(serializers.Serializer):
+    carePlanId = serializers.UUIDField()
+    originalContent = serializers.CharField()
+    editedContent = serializers.CharField()
+    feedbackText = serializers.CharField(
+        min_length=10,
+        error_messages={
+            'min_length': 'Feedback must be at least 10 characters',
+            'required': 'Feedback text is required'
+        }
+    )
+
+    def validate_feedbackText(self, value):
+        # Basic validation - ensure it's not just whitespace
+        if not value.strip():
+            raise serializers.ValidationError("Feedback cannot be empty")
+        return value.strip()
+
+class CarePlanFeedbackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CarePlanFeedback
+        fields = [
+            'id', 'care_plan', 'original_content', 'edited_content', 
+            'diff_data', 'feedback_text', 'feedback_categories',
+            'extracted_issues', 'extracted_suggestions', 'severity',
+            'processed_for_prompt', 'batch_number', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']

@@ -1,6 +1,18 @@
-# Specialty Pharmacy Care Plan Generator (Django + Next.js)
+# Specialty Pharmacy Care Plan Generator (Premium UI)
 
-AI-assisted intake and care-plan generator for specialty pharmacy teams. Frontend is a guided wizard (Next.js 16 + Tailwind). Backend is Django REST with strong validation, persistence, and LLM integration.
+AI-assisted intake and care-plan generator for specialty pharmacy teams. 
+**Now features a completely redesigned Premium Black & White aesthetic.**
+
+## UI Walkthrough
+The application features a guided 4-step wizard with a minimalist, high-contrast design.
+
+| **Step 1: Provider Details** | **Step 2: Patient Demographics** |
+| :---: | :---: |
+| <img src="screenshots/step1_provider.png" width="400" /> | <img src="screenshots/step2_patient.png" width="400" /> |
+| **Step 3: Clinical & Order** | **Step 4: Review & Submit** |
+| <img src="screenshots/step3_clinical.png" width="400" /> | <img src="screenshots/step4_review.png" width="400" /> |
+
+Frontend is a guided wizard (Next.js 16 + Tailwind v4). Backend is Django REST with strong validation, persistence, and LLM integration.
 
 ## Overview
 - **Validation:** zod on the client; DRF serializers on the server. Provider name↔NPI and patient name/DOB/sex↔MRN consistency checks prevent mismatched credentials.
