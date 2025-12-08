@@ -1,24 +1,26 @@
 # Database Connection Info for pgAdmin
 
+Use the docker-compose/Postgres service credentials below.
+
 ## Connection Details
 - **Host:** `localhost`
-- **Port:** `5433` (not 5432!)
-- **Database:** `careplan_db`
-- **Username:** `careplan_user`  
-- **Password:** `careplan_password`
+- **Port:** `5433` (mapped from container 5432)
+- **Database:** `lamarhealth`
+- **Username:** `user`
+- **Password:** `password`
 
 ## Tables Created by Migration 0002
 
 After running the migrations, these tables should exist:
 
-1. **careplan_careplan** - Updated with new fields:
+1. **careplan_careplan** – updated with new fields:
    - `version` (integer)
    - `is_edited` (boolean)
    - `edit_count` (integer)
    - `order_id` (UUID FK)
    - `updated_at` (timestamp)
 
-2. **careplan_careplanfeedback** - NEW table:
+2. **careplan_careplanfeedback** – new table:
    - `id` (UUID PK)
    - `care_plan_id` (UUID FK → careplan_careplan)
    - `original_content` (text)
@@ -35,39 +37,26 @@ After running the migrations, these tables should exist:
    - `created_at` (timestamp)
    - `updated_at` (timestamp)
 
-## How to Refresh pgAdmin
+## Quick Checks in pgAdmin
 
-1. **Right-click** on your database connection in pgAdmin
-2. Click **"Refresh"**
-3. Or **disconnect and reconnect** to the database
-4. Navigate to: **Servers → YourConnection → Databases → careplan_db → Schemas → public → Tables**
-
-## If Tables Still Don't Appear
-
-Run this SQL query in pgAdmin's query tool:
+If tables do not appear after a refresh, run these in the query tool:
 
 ```sql
 -- Verify migrations table
 SELECT * FROM django_migrations WHERE app = 'careplan';
 
 -- List all careplan tables
-SELECT tablename FROM pg_tables 
-WHERE schemaname = 'public' 
+SELECT tablename FROM pg_tables
+WHERE schemaname = 'public'
 AND tablename LIKE 'careplan%'
 ORDER BY tablename;
 
 -- Check careplan_careplanfeedback structure
 \d careplan_careplanfeedback;
-```
 
-## Quick Verification Query
-
-```sql
--- This should return the new columns
-SELECT column_name, data_type 
-FROM information_schema.columns 
+-- Confirm new columns on careplan_careplan
+SELECT column_name, data_type
+FROM information_schema.columns
 WHERE table_name = 'careplan_careplan'
 ORDER BY ordinal_position;
 ```
-
-The tables ARE there - migrations confirmed with `[X] 0002_careplan_edit_count_careplan_is_edited_and_more`
