@@ -39,6 +39,12 @@ class PatientSerializer(serializers.Serializer):
             raise serializers.ValidationError("MRN must be exactly 6 digits")
         return value
 
+    def validate_dob(self, value):
+        from datetime import date
+        if value > date.today():
+            raise serializers.ValidationError("Date of birth cannot be in the future")
+        return value
+
 class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order

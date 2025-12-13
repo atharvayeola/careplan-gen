@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formSchema, FormData } from "@/lib/validation";
 import { useState, useEffect } from "react";
+import { authenticatedFetch } from "@/lib/auth";
 
 const STEPS = [
     { id: 0, name: "Provider Details" },
@@ -45,6 +46,7 @@ export default function PatientForm() {
     const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
     const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
     const [feedbackError, setFeedbackError] = useState<string | null>(null);
+    const [showNewOrderMenu, setShowNewOrderMenu] = useState(false);
 
     const {
         register,
@@ -123,7 +125,7 @@ You can also provide general feedback in your own words.`;
             setProviderValidationError(null);
             const providerData = getValues("provider");
             try {
-                const response = await fetch("http://localhost:8000/api/provider/validate/", {
+                const response = await authenticatedFetch("http://localhost:8000/api/provider/validate/", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(providerData),
@@ -145,7 +147,7 @@ You can also provide general feedback in your own words.`;
             setPatientValidationError(null);
             const patientData = getValues("patient");
             try {
-                const response = await fetch("http://localhost:8000/api/patient/validate/", {
+                const response = await authenticatedFetch("http://localhost:8000/api/patient/validate/", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(patientData),
@@ -212,6 +214,17 @@ You can also provide general feedback in your own words.`;
         setProviderValidationError(null);
         setPatientValidationError(null);
         setCurrentStep(0);
+        setShowNewOrderMenu(false);
+        // Reset feedback state
+        setCarePlanId(null);
+        setOriginalCarePlan("");
+        setEditedCarePlan("");
+        setIsEditingCarePlan(false);
+        setShowFeedbackForm(false);
+        setFeedbackText("");
+        setExtractedCategories([]);
+        setFeedbackSubmitted(false);
+        setFeedbackError(null);
         window.scrollTo(0, 0);
     };
 
@@ -220,7 +233,7 @@ You can also provide general feedback in your own words.`;
 
         setIsGenerating(true);
         try {
-            const response = await fetch("http://localhost:8000/api/generate-care-plan/", {
+            const response = await authenticatedFetch("http://localhost:8000/api/generate-care-plan/", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ orderId }),
@@ -264,7 +277,7 @@ You can also provide general feedback in your own words.`;
 
         setIsSavingCarePlan(true);
         try {
-            const response = await fetch('http://localhost:8000/api/care-plan/update/', {
+            const response = await authenticatedFetch('http://localhost:8000/api/care-plan/update/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -294,7 +307,7 @@ You can also provide general feedback in your own words.`;
         setIsSubmittingFeedback(true);
         setFeedbackError(null);
         try {
-            const response = await fetch('http://localhost:8000/api/feedback/submit/', {
+            const response = await authenticatedFetch('http://localhost:8000/api/feedback/submit/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -349,7 +362,7 @@ You can also provide general feedback in your own words.`;
                 }
             };
 
-            const response = await fetch('http://localhost:8000/api/submit/', {
+            const response = await authenticatedFetch('http://localhost:8000/api/submit/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -979,24 +992,54 @@ You can also provide general feedback in your own words.`;
                         )
                     )}
 
-                    {success && !carePlan && (
-                        <button
-                            type="button"
-                            onClick={() => handleStartNewOrder(true)}
-                            className="btn-secondary ml-auto"
-                        >
-                            New Order (Same Provider)
-                        </button>
-                    )}
+                    {success && (
+                        <div className="relative ml-auto">
+                            <button
+                                type="button"
+                                onClick={() => setShowNewOrderMenu(!showNewOrderMenu)}
+                                className="btn-secondary flex items-center gap-2"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                New Order
+                                <svg className={`w-4 h-4 transition-transform ${showNewOrderMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
 
-                    {success && carePlan && (
-                        <button
-                            type="button"
-                            onClick={() => handleStartNewOrder(false)}
-                            className="btn-secondary ml-auto"
-                        >
-                            Start Fresh Order
-                        </button>
+                            {showNewOrderMenu && (
+                                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-zinc-200 py-1 z-10 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleStartNewOrder(true)}
+                                        className="w-full px-4 py-3 text-left text-sm hover:bg-zinc-50 transition-colors flex items-start gap-3"
+                                    >
+                                        <svg className="w-5 h-5 text-zinc-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                        <div>
+                                            <span className="font-medium text-zinc-900 block">Same Provider</span>
+                                            <span className="text-xs text-zinc-500">Keep provider, new patient/order</span>
+                                        </div>
+                                    </button>
+                                    <div className="h-px bg-zinc-100 mx-3" />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleStartNewOrder(false)}
+                                        className="w-full px-4 py-3 text-left text-sm hover:bg-zinc-50 transition-colors flex items-start gap-3"
+                                    >
+                                        <svg className="w-5 h-5 text-zinc-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        <div>
+                                            <span className="font-medium text-zinc-900 block">Fresh Start</span>
+                                            <span className="text-xs text-zinc-500">Clear everything, start over</span>
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 

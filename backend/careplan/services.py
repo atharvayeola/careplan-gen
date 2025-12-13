@@ -1,5 +1,6 @@
 from .models import Provider, Patient, Order, CarePlanFeedback
 from django.utils import timezone
+from django.db import models
 from datetime import timedelta
 import difflib
 from pathlib import Path

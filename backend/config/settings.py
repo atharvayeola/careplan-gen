@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,6 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'careplan',
 ]
@@ -92,6 +95,51 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
+# Allow credentials for JWT cookies
+CORS_ALLOW_CREDENTIALS = True
+
+
+# Custom User Model
+AUTH_USER_MODEL = 'careplan.User'
+
+
+# Django REST Framework configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    # Note: We're not setting DEFAULT_PERMISSION_CLASSES globally
+    # so existing endpoints remain public during migration.
+    # Add IsAuthenticated to individual views as needed.
+}
+
+
+# Simple JWT Configuration
+SIMPLE_JWT = {
+    # Token lifetimes - healthcare apps need tighter security
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),  # Short-lived for PHI protection
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': True,  # Issue new refresh token on each refresh
+    'BLACKLIST_AFTER_ROTATION': True,  # Blacklist old refresh tokens
+    
+    # Token settings
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    
+    # Header settings
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    
+    # Token claims
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    
+    # Token validation
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'JTI_CLAIM': 'jti',
+}
+
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -133,3 +181,4 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+

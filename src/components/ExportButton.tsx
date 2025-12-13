@@ -1,9 +1,16 @@
 "use client";
 
+import { authenticatedFetch } from "@/lib/auth";
+
 export default function ExportButton() {
     const handleExport = async () => {
         try {
-            const response = await fetch("http://localhost:8000/api/export/");
+            const response = await authenticatedFetch("http://localhost:8000/api/export/");
+
+            if (response.status === 403) {
+                alert("You do not have permission to export data. This feature is restricted to administrators.");
+                return;
+            }
 
             if (!response.ok) {
                 alert("Export failed");
@@ -21,7 +28,7 @@ export default function ExportButton() {
             URL.revokeObjectURL(url);
         } catch (error) {
             console.error(error);
-            alert("Export failed");
+            // authenticatedFetch might redirect on 401, so we just catch 
         }
     };
 

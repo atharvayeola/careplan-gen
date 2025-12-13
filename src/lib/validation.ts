@@ -9,9 +9,18 @@ export const patientSchema = z.object({
     firstName: z.string().min(1, "First name is required").regex(/^[^0-9]*$/, "First name cannot contain numbers"),
     lastName: z.string().min(1, "Last name is required").regex(/^[^0-9]*$/, "Last name cannot contain numbers"),
     mrn: z.string().length(6, "MRN must be exactly 6 digits").regex(/^\d+$/, "MRN must contain only numbers"),
-    dob: z.string().refine((date) => !isNaN(Date.parse(date)), {
-        message: "Invalid date format",
-    }),
+    dob: z.string()
+        .refine((date) => !isNaN(Date.parse(date)), {
+            message: "Invalid date format",
+        })
+        .refine((date) => {
+            const inputDate = new Date(date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return inputDate <= today;
+        }, {
+            message: "Date of birth cannot be in the future",
+        }),
     sex: z.enum(["Male", "Female", "Other"]),
     weight: z.number().positive("Weight must be positive").optional().nullable(),
     primaryDiagnosis: z.string().min(1, "Primary diagnosis is required"),

@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from .serializers import (
@@ -22,6 +23,8 @@ from .models import Order, CarePlan, CarePlanFeedback
 from .llm import generate_care_plan, extract_feedback_keypoints
 
 class ProviderValidationView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = ProviderSerializer(data=request.data)
         if not serializer.is_valid():
@@ -46,6 +49,8 @@ class ProviderValidationView(APIView):
         return Response({'success': True}, status=status.HTTP_200_OK)
 
 class PatientValidationView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         credential_data = {
             'firstName': request.data.get('firstName'),
@@ -82,6 +87,8 @@ class PatientValidationView(APIView):
         return Response({'success': True}, status=status.HTTP_200_OK)
 
 class SubmitView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = SubmitFormSerializer(data=request.data)
         if not serializer.is_valid():
@@ -158,6 +165,8 @@ class SubmitView(APIView):
         })
 
 class GenerateCarePlanView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         order_id = request.data.get('orderId')
         if not order_id:
@@ -194,7 +203,16 @@ class CarePlanUpdateView(APIView):
     POST /api/care-plan/update/
     Updates a care plan with user edits
     """
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
+        # Role Check: Only Pharmacists and Admins can edit
+        if not request.user.can_edit_care_plan():
+            return Response(
+                {'error': 'Only pharmacists or administrators can edit care plans.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = CarePlanUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -218,6 +236,8 @@ class FeedbackSubmitView(APIView):
     POST /api/feedback/submit/
     Submits user feedback, extracts key points via LLM, triggers batch processing
     """
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = FeedbackSubmissionSerializer(data=request.data)
         if not serializer.is_valid():
@@ -280,7 +300,16 @@ class FeedbackSubmitView(APIView):
         })
 
 class ExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
+        # Restriction: Only admins can export data
+        if not request.user.can_manage_users():
+             return Response(
+                {'error': 'Only administrators can export data.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         orders = Order.objects.select_related('patient', 'provider').order_by('-created_at')
         
         response = HttpResponse(content_type='text/csv')

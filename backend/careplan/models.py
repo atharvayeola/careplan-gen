@@ -2,6 +2,9 @@ import uuid
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
 
+# Import User model for AUTH_USER_MODEL
+from .models_auth import User  # noqa: F401
+
 class Provider(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     npi = models.CharField(max_length=10, unique=True)
