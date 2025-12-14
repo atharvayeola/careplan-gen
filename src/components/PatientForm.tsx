@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { formSchema, FormData } from "@/lib/validation";
 import { useState, useEffect } from "react";
 import { authenticatedFetch } from "@/lib/auth";
+import { useAuth } from "@/lib/AuthContext";
 
 const STEPS = [
     { id: 0, name: "Provider Details" },
@@ -23,6 +24,7 @@ const GENERATION_STEPS = [
 ];
 
 export default function PatientForm() {
+    const { user } = useAuth();
     const [currentStep, setCurrentStep] = useState(0);
     const [warnings, setWarnings] = useState<string[]>([]);
     const [submitErrors, setSubmitErrors] = useState<string[]>([]);
@@ -833,16 +835,18 @@ You can also provide general feedback in your own words.`;
                                             {isEditingCarePlan && <span className="text-xs text-zinc-500 font-normal ml-2">(Editing Mode)</span>}
                                         </h3>
                                         <div className="flex gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => setIsEditingCarePlan(!isEditingCarePlan)}
-                                                className={`text-xs px-3 py-1.5 rounded border font-medium transition-colors ${isEditingCarePlan
-                                                    ? 'bg-black text-white border-black hover:bg-zinc-800'
-                                                    : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50 hover:text-black'
-                                                    }`}
-                                            >
-                                                {isEditingCarePlan ? 'View Only' : 'Edit Plan'}
-                                            </button>
+                                            {(user?.role === 'pharmacist' || user?.role === 'admin') && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsEditingCarePlan(!isEditingCarePlan)}
+                                                    className={`text-xs px-3 py-1.5 rounded border font-medium transition-colors ${isEditingCarePlan
+                                                        ? 'bg-black text-white border-black hover:bg-zinc-800'
+                                                        : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50 hover:text-black'
+                                                        }`}
+                                                >
+                                                    {isEditingCarePlan ? 'View Only' : 'Edit Plan'}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 

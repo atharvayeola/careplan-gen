@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Provider, Patient, Order, CarePlan, CarePlanFeedback
+from .models_auth import User
 import re
 
 class ProviderSerializer(serializers.Serializer):
@@ -10,6 +11,37 @@ class ProviderSerializer(serializers.Serializer):
         if not re.match(r'^\d{10}$', value):
             raise serializers.ValidationError("NPI must be exactly 10 digits")
         return value
+
+    def validate(self, data):
+        npi = data.get('npi')
+        name = data.get('name')
+
+        if npi and name:
+            # Check for conflict with registered Pharmacist/User
+            conflicting_user = User.objects.filter(provider_npi=npi).first()
+            if conflicting_user:
+                # Construct full name for comparison (if available)
+                user_parts = []
+                if conflicting_user.first_name: user_parts.append(conflicting_user.first_name)
+                if conflicting_user.last_name: user_parts.append(conflicting_user.last_name)
+                
+                # If user strictly has no name set, we might skip validation or assume username
+                # But Pharmacist registration requires names usually.
+                user_full_name = " ".join(user_parts) if user_parts else conflicting_user.username
+
+                # Normalize for comparison
+                user_name_lower = user_full_name.strip().lower()
+                provider_name_lower = name.strip().lower()
+
+                # Basic inclusion check: "John Doe" vs "Dr. John Doe" -> OK
+                # "John Doe" vs "Jane Smith" -> Fail
+                # We check if one is a substring of the other (simplified fuzzy match)
+                if user_name_lower not in provider_name_lower and provider_name_lower not in user_name_lower:
+                     raise serializers.ValidationError({
+                        "npi": f"This NPI is registered to user '{user_full_name}'. The provider name '{name}' does not match."
+                     })
+        
+        return data
 
 class PatientSerializer(serializers.Serializer):
     # Accept camelCase from frontend, map to snake_case
