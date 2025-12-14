@@ -8,9 +8,9 @@ The application features a guided 4-step wizard with a minimalist, high-contrast
 
 | | |
 | :---: | :---: |
-| <img src="screenshots/01_app_shot.png" width="400" /> | <img src="screenshots/02_app_shot.png" width="400" /> |
-| <img src="screenshots/03_app_shot.png" width="400" /> | <img src="screenshots/04_app_shot.png" width="400" /> |
-| <img src="screenshots/05_app_shot.png" width="400" /> | |
+| <img src="screenshots/03_app_shot.png" width="400" /> | <img src="screenshots/02_app_shot.png" width="400" /> |
+| <img src="screenshots/04_app_shot.png" width="400" /> | <img src="screenshots/05_app_shot.png" width="400" /> |
+| <img src="screenshots/01_app_shot.png" width="400" /> | |
 
 Frontend is a guided wizard (Next.js 16 + Tailwind v4). Backend is Django REST with JWT authentication, role-based access, strong validation, persistence, and LLM integration.
 
