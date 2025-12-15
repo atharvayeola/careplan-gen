@@ -44,9 +44,9 @@ export default function Home() {
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">LH</span>
+                                <span className="text-white font-bold text-sm">AY</span>
                             </div>
-                            <span className="text-sm font-semibold text-zinc-500 tracking-wide uppercase">Lamar Health</span>
+                            <span className="text-sm font-semibold text-zinc-500 tracking-wide uppercase">Automate your documentation</span>
                         </div>
                         <h1 className="text-3xl sm:text-4xl font-bold text-zinc-900 tracking-tight">
                             Specialty Pharmacy Care Plan

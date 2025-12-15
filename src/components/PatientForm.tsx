@@ -135,7 +135,9 @@ You can also provide general feedback in your own words.`;
                 const result = await response.json();
 
                 if (!response.ok) {
-                    setProviderValidationError(result.error || "Provider credentials do not match our records.");
+                    // Handle DRF field errors (e.g., { npi: ["Error..."] })
+                    const fieldError = result.npi?.[0] || result.name?.[0] || result.error;
+                    setProviderValidationError(fieldError || "Provider credentials do not match our records.");
                     return;
                 }
             } catch (error) {
