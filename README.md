@@ -1,10 +1,33 @@
-# Specialty Pharmacy Care Plan Generator (Premium UI)
+# Specialty Pharmacy Care Plan Generator
 
-AI-assisted intake and care-plan generator for specialty pharmacy teams.  
-**Now features JWT Authentication with Role-Based Access Control and a Premium Black & White aesthetic.**
+### Smart, AI-Assisted Clinical Documentation for Specialty Pharmacy Teams
+
+**Automate your intake workflow, ensure compliance, and generate comprehensive care plans in seconds.**
+
+## The Problem
+Specialty pharmacists spend up to 40% of their time on administrative documentation rather than direct patient care. The process of initiating new therapies is fraught with manual bottlenecks:
+*   **Verification Errors**: Manually cross-referencing Provider NPIs and Patient MRNs is slow and error-prone.
+*   **Time-Consuming Documentation**: Drafting detailed care plans that synthesize patient demographics, clinical history, and complex medication guidelines can take 20-30 minutes per patient.
+*   **Clinical Inconsistency**: Ensuring every care plan aligns with the latest clinical safety guidelines requires constant vigilance and standardization across the team.
+
+## The Solution
+This application is a purpose-built **Clinical Decision Support System** that streamlines the entire intake and care planning lifecycle. By combining rigid validation logic with flexible AI generation, it offers:
+
+*   **🛡️ Automated Safety Validation**:
+    *   **Credential Verification**: Instantly validates Provider NPIs and Patient MRNs against your internal registry, blocking incorrect or unauthorized submissions before they start.
+    *   **Duplicate Detection**: Intelligent logic prevents duplicate patient records and warns of duplicate orders within 24 hours.
+
+*   **🧠 AI-Powered Clinical Intelligence**:
+    *   **Instant Care Plans**: Uses Google's Gemini LLM to generate professional, clinically accurate care plans in seconds.
+    *   **Comprehensive Coverage**: Automatically accounts for renal function, allergies, drug-drug interactions, and monitoring requirements.
+    *   **SMART Goals**: Auto-generates Specific, Measurable, Achievable, Relevant, and Time-bound goals for every patient.
+
+*   **🔄 Learning System**:
+    *   **Feedback Loop**: Pharmacists can edit AI-generated plans. The system analyzes these edits to continuously refine and improve its future clinical recommendations.
 
 ## UI Walkthrough
-The application features a guided 4-step wizard with a minimalist, high-contrast design.
+The application features a guided 4-step wizard designed for efficiency and clarity.
+
 
 | | |
 | :---: | :---: |
